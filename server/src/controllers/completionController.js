@@ -12,12 +12,30 @@ const crypto = require("crypto");
 const createCompletion = async (req, res) => {
   try {
     const { model, prompt } = req.body;
+    const idempotencyKey = req.header("Idempotency-Key");
 
     if (!model || !prompt) {
       return res.status(400).json({ error: "model and prompt are required" });
     }
 
-    // Rate limit check first — fastest, cheapest check
+    // If this exact request was already processed, return the cached result
+    if (idempotencyKey) {
+      const existing = await UsageRecord.findOne({ requestId: idempotencyKey });
+      if (existing) {
+        return res.json({
+          response: existing.responseText,
+          usage: {
+            inputTokens: existing.inputTokens,
+            outputTokens: existing.outputTokens,
+            cost: existing.cost,
+            willOverage: false,
+          },
+          idempotent: true,
+        });
+      }
+    }
+
+    // Rate limit check
     const tier = await Tier.findOne({ name: req.user.tier });
     const rateLimit = await checkRateLimit(
       req.user.apiKey,
@@ -32,7 +50,7 @@ const createCompletion = async (req, res) => {
       });
     }
 
-    // Quota check before calling Groq
+    // Quota check
     const quota = await checkQuota(req.user, tier);
 
     if (!quota.allowed) {
@@ -53,16 +71,18 @@ const createCompletion = async (req, res) => {
       result.outputTokens,
     );
 
-    // Record usage
+    // Record usage — use client's idempotency key if provided, else generate one
     const billingPeriod = getCurrentBillingPeriod();
+    const requestId = idempotencyKey || crypto.randomUUID();
 
     await UsageRecord.create({
       user: req.user._id,
-      requestId: crypto.randomUUID(),
+      requestId,
       model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       cost,
+      responseText: result.content,
       billingPeriod,
     });
 

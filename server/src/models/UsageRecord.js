@@ -29,6 +29,9 @@ const usageRecordSchema = new mongoose.Schema(
       type: Number,
       required: true, // computed cost for this request, in USD
     },
+    responseText: {
+      type: String,
+    },
     billingPeriod: {
       type: String,
       required: true, // e.g. '2026-09', used to group usage by month
