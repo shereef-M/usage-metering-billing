@@ -4,6 +4,8 @@ const {
   checkQuota,
   getCurrentBillingPeriod,
 } = require("../services/quotaService");
+const { checkRateLimit } = require("../services/rateLimitService");
+const Tier = require("../models/Tier");
 const UsageRecord = require("../models/UsageRecord");
 const crypto = require("crypto");
 
@@ -15,8 +17,23 @@ const createCompletion = async (req, res) => {
       return res.status(400).json({ error: "model and prompt are required" });
     }
 
-    // Check quota before calling Groq
-    const quota = await checkQuota(req.user);
+    // Rate limit check first — fastest, cheapest check
+    const tier = await Tier.findOne({ name: req.user.tier });
+    const rateLimit = await checkRateLimit(
+      req.user.apiKey,
+      tier.rateLimitPerMinute,
+    );
+
+    if (!rateLimit.allowed) {
+      return res.status(429).json({
+        error: "Rate limit exceeded",
+        limit: rateLimit.limit,
+        count: rateLimit.count,
+      });
+    }
+
+    // Quota check before calling Groq
+    const quota = await checkQuota(req.user, tier);
 
     if (!quota.allowed) {
       return res.status(429).json({

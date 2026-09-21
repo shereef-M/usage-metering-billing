@@ -22,8 +22,10 @@ const getUsageThisPeriod = async (userId) => {
   return result.length > 0 ? result[0].totalTokens : 0;
 };
 
-const checkQuota = async (user) => {
-  const tier = await Tier.findOne({ name: user.tier });
+const checkQuota = async (user, tier) => {
+  if (!tier) {
+    tier = await Tier.findOne({ name: user.tier });
+  }
 
   if (!tier) {
     throw new Error(`Unknown tier: ${user.tier}`);
@@ -36,7 +38,6 @@ const checkQuota = async (user) => {
     return { allowed: true, willOverage: false, usedTokens, tier };
   }
 
-  // Over quota — check policy
   if (tier.overagePolicy === "allow-overage") {
     return { allowed: true, willOverage: true, usedTokens, tier };
   }
@@ -49,7 +50,6 @@ const checkQuota = async (user) => {
     return { allowed: false, usedTokens, tier };
   }
 
-  // hard-block
   return { allowed: false, usedTokens, tier };
 };
 
