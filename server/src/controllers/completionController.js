@@ -1,5 +1,9 @@
 const { callGroq } = require("../services/groqService");
 const { calculateCost } = require("../services/costService");
+const {
+  checkQuota,
+  getCurrentBillingPeriod,
+} = require("../services/quotaService");
 const UsageRecord = require("../models/UsageRecord");
 const crypto = require("crypto");
 
@@ -9,6 +13,17 @@ const createCompletion = async (req, res) => {
 
     if (!model || !prompt) {
       return res.status(400).json({ error: "model and prompt are required" });
+    }
+
+    // Check quota before calling Groq
+    const quota = await checkQuota(req.user);
+
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: "Quota exceeded",
+        usedTokens: quota.usedTokens,
+        quota: quota.tier.monthlyTokenQuota,
+      });
     }
 
     // Call Groq
@@ -22,8 +37,7 @@ const createCompletion = async (req, res) => {
     );
 
     // Record usage
-    const now = new Date();
-    const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const billingPeriod = getCurrentBillingPeriod();
 
     await UsageRecord.create({
       user: req.user._id,
@@ -41,6 +55,7 @@ const createCompletion = async (req, res) => {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         cost,
+        willOverage: quota.willOverage,
       },
     });
   } catch (err) {
