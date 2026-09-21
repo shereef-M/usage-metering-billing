@@ -39,16 +39,16 @@ const seed = async () => {
 
   await Model.insertMany([
     {
-      name: "llama-3.3-70b-versatile",
+      name: "openai/gpt-oss-20b",
       provider: "groq",
-      inputPricePerToken: 0.00000059,
-      outputPricePerToken: 0.00000079,
+      inputPricePerToken: 0.075 / 1_000_000,
+      outputPricePerToken: 0.3 / 1_000_000,
     },
     {
-      name: "llama-3.1-8b-instant",
+      name: "openai/gpt-oss-120b",
       provider: "groq",
-      inputPricePerToken: 0.00000005,
-      outputPricePerToken: 0.00000008,
+      inputPricePerToken: 0.15 / 1_000_000,
+      outputPricePerToken: 0.6 / 1_000_000,
     },
   ]);
 
