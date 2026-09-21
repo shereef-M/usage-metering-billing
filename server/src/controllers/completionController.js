@@ -1,20 +1,24 @@
-const { callGroq } = require('../services/groqService');
-const { calculateCost } = require('../services/costService');
-const { checkQuota, getCurrentBillingPeriod } = require('../services/quotaService');
-const { checkRateLimit } = require('../services/rateLimitService');
-const Tier = require('../models/Tier');
-const UsageRecord = require('../models/UsageRecord');
-const usageQueue = require('../queues/usageQueue');
-const redis = require('../config/redis');
-const crypto = require('crypto');
+const { callGroq } = require("../services/groqService");
+const { calculateCost } = require("../services/costService");
+const {
+  checkQuota,
+  getCurrentBillingPeriod,
+} = require("../services/quotaService");
+const { checkRateLimit } = require("../services/rateLimitService");
+const Tier = require("../models/Tier");
+const UsageRecord = require("../models/UsageRecord");
+const usageQueue = require("../queues/usageQueue");
+const redis = require("../config/redis");
+const crypto = require("crypto");
+const { estimateCost } = require("../services/estimationService");
 
 const createCompletion = async (req, res) => {
   try {
     const { model, prompt } = req.body;
-    const idempotencyKey = req.header('Idempotency-Key');
+    const idempotencyKey = req.header("Idempotency-Key");
 
     if (!model || !prompt) {
-      return res.status(400).json({ error: 'model and prompt are required' });
+      return res.status(400).json({ error: "model and prompt are required" });
     }
 
     // Fast idempotency check — Redis marker first (covers in-flight/queued requests)
@@ -44,11 +48,14 @@ const createCompletion = async (req, res) => {
 
     // Rate limit check
     const tier = await Tier.findOne({ name: req.user.tier });
-    const rateLimit = await checkRateLimit(req.user.apiKey, tier.rateLimitPerMinute);
+    const rateLimit = await checkRateLimit(
+      req.user.apiKey,
+      tier.rateLimitPerMinute,
+    );
 
     if (!rateLimit.allowed) {
       return res.status(429).json({
-        error: 'Rate limit exceeded',
+        error: "Rate limit exceeded",
         limit: rateLimit.limit,
         count: rateLimit.count,
       });
@@ -59,9 +66,25 @@ const createCompletion = async (req, res) => {
 
     if (!quota.allowed) {
       return res.status(429).json({
-        error: 'Quota exceeded',
+        error: "Quota exceeded",
         usedTokens: quota.usedTokens,
         quota: quota.tier.monthlyTokenQuota,
+      });
+    }
+    // Pre-flight estimate — catch requests that would clearly blow remaining quota
+    const estimate = await estimateCost(model, prompt, req.body.maxTokens);
+    const remainingTokens = tier.monthlyTokenQuota - quota.usedTokens;
+    const estimatedTotalTokens =
+      estimate.inputTokens + estimate.estimatedOutputTokens;
+
+    if (
+      tier.overagePolicy === "hard-block" &&
+      estimatedTotalTokens > remainingTokens
+    ) {
+      return res.status(429).json({
+        error: "Request would exceed remaining quota",
+        estimatedTokens: estimatedTotalTokens,
+        remainingTokens,
       });
     }
 
@@ -69,7 +92,11 @@ const createCompletion = async (req, res) => {
     const result = await callGroq(model, prompt);
 
     // Calculate cost
-    const cost = await calculateCost(model, result.inputTokens, result.outputTokens);
+    const cost = await calculateCost(
+      model,
+      result.inputTokens,
+      result.outputTokens,
+    );
 
     const billingPeriod = getCurrentBillingPeriod();
     const requestId = idempotencyKey || crypto.randomUUID();
@@ -82,15 +109,24 @@ const createCompletion = async (req, res) => {
         cost,
         willOverage: quota.willOverage,
       },
+      preflightEstimate: {
+        estimatedInputTokens: estimate.inputTokens,
+        estimatedOutputTokens: estimate.estimatedOutputTokens,
+        estimatedCost: estimate.estimatedCost,
+      },
     };
 
     // Set a fast Redis marker immediately, so a rapid retry is caught before the worker finishes
     if (idempotencyKey) {
-      await redis.set(`idempotency:${idempotencyKey}`, JSON.stringify(responsePayload), { ex: 3600 });
+      await redis.set(
+        `idempotency:${idempotencyKey}`,
+        JSON.stringify(responsePayload),
+        { ex: 3600 },
+      );
     }
 
     // Enqueue the actual DB write instead of doing it inline
-    await usageQueue.add('record-usage', {
+    await usageQueue.add("record-usage", {
       userId: req.user._id,
       requestId,
       model,
