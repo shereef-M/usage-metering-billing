@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const connectDB = require("./config/db");
 const userRoutes = require("./routes/userRoutes");
 const completionRoutes = require("./routes/completionRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(helmet());
 app.use(express.json());
 app.use("/api/users", userRoutes);
 app.use("/api/completions", completionRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
