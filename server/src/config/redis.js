@@ -1,8 +1,15 @@
-const { Redis } = require("@upstash/redis");
+const IORedis = require("ioredis");
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+const connection = new IORedis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: null, // required by BullMQ
+  retryStrategy(times) {
+    const delay = Math.min(times * 500, 5000); // backoff, capped at 5s
+    return delay;
+  },
 });
 
-module.exports = redis;
+connection.on("error", (err) => {
+  console.error("Redis connection error:", err.message);
+});
+
+module.exports = connection;

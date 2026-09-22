@@ -35,6 +35,13 @@ const worker = new Worker(
   },
   { connection },
 );
+worker.on("error", (err) => {
+  console.error("Worker error:", err.message);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection in worker:", err.message);
+});
 
 worker.on("failed", (job, err) => {
   console.error(`Job ${job.id} failed:`, err.message);
