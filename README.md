@@ -48,14 +48,17 @@ Both the API server and the worker need to be running for usage recording, alert
 
 ## Key endpoints
 
-| Method | Endpoint | Auth | Purpose |
-|---|---|---|---|
-| POST | `/api/users` | — | Create a user, returns API key |
-| POST | `/api/completions` | `x-api-key` | Metered LLM completion |
-| GET | `/api/dashboard` | `x-api-key` | Current usage & quota summary |
-| GET | `/api/dashboard/invoice?format=json\|csv` | `x-api-key` | Billing statement |
-| GET | `/api/admin/summary` | `x-admin-key` | Cross-user revenue/usage summary |
+| Method | Endpoint                                  | Auth          | Purpose                          |
+| ------ | ----------------------------------------- | ------------- | -------------------------------- |
+| POST   | `/api/users`                              | —             | Create a user, returns API key   |
+| POST   | `/api/completions`                        | `x-api-key`   | Metered LLM completion           |
+| GET    | `/api/dashboard`                          | `x-api-key`   | Current usage & quota summary    |
+| GET    | `/api/dashboard/invoice?format=json\|csv` | `x-api-key`   | Billing statement                |
+| GET    | `/api/admin/summary`                      | `x-admin-key` | Cross-user revenue/usage summary |
 
 ## Cost
 
 Built entirely on free tiers MongoDB Atlas, Upstash Redis, and Groq's free tier. No paid infrastructure required to run or evaluate this project.
+
+**Live:** https://usage-metering-billing.onrender.com  
+(Note: free-tier instance may take 30–50 seconds to wake up on first request after inactivity.)
