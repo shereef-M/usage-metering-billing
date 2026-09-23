@@ -1,12 +1,10 @@
-require("dotenv").config();
+
 const { Worker } = require("bullmq");
 const connection = require("../config/redisConnection");
 const connectDB = require("../config/db");
 const UsageRecord = require("../models/UsageRecord");
 const User = require("../models/User");
 const { checkAndCreateAlerts } = require("../services/alertService");
-
-connectDB();
 
 const worker = new Worker(
   "usage-recording",

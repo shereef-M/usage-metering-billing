@@ -7,6 +7,7 @@ const userRoutes = require("./routes/userRoutes");
 const completionRoutes = require("./routes/completionRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+require("./queues/usageWorker");
 
 const app = express();
 
